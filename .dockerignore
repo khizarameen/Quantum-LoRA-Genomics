@@ -1,0 +1,10 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+dnabert_promoters_output/
+.ipynb_checkpoints/
+.git/
+.gitignore
+*.log

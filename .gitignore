@@ -1,0 +1,38 @@
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python cache & build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Model checkpoints & large weights
+dnabert_promoters_output/
+my_fine_tuned_dnabert/
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Hugging Face / local cache & logs
+.cache/
+logs/
+*.log
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Environment variables & secrets
+.env
+.env.*
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

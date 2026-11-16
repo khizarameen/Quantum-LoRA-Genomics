@@ -1,0 +1,108 @@
+================================================================================
+GENOMIC FOUNDATION MODELS & HYBRID QUANTUM-CLASSICAL ADAPTATION (PROJECT SUMMARY)
+================================================================================
+
+1. PROJECT OVERVIEW
+--------------------------------------------------------------------------------
+This workspace implements and compares two parameter-efficient approaches for
+genomic sequence modeling on the Human Non-TATA Promoters dataset
+("katarinagresova/Genomic_Benchmarks_human_nontata_promoters"):
+
+  A) Classical Fine-Tuned DNABERT-2 (finetune_dnabert.py)
+  B) Hybrid Quantum-Classical Genomic Adaptation / Quantum-LoRA (quantum_lora_genomics.py)
+
+Both approaches freeze the heavy 117M-parameter DNABERT-2 transformer backbone
+and train only lightweight downstream layers/adapters, making them fast and
+effective in low-data regimes on CPU.
+
+
+2. MODEL A: CLASSICAL FINE-TUNED DNABERT-2
+--------------------------------------------------------------------------------
+- Script:          finetune_dnabert.py
+- Base Model:      zhihan1996/DNABERT-2-117M (BertForSequenceClassification)
+- Saved Artifact:  ./my_fine_tuned_dnabert/ (model.safetensors, tokenizer, config)
+                   ./dnabert_promoters_output/ (training checkpoints)
+- Dataset Split:   128 Train samples / 64 Eval samples (max_length=128)
+- Training Setup:  Hugging Face Trainer, 3 epochs, batch_size=8, lr=5e-4,
+                   weight_decay=0.01
+- Parameter Count:
+    * Total Parameters:     117,070,082
+    * Trainable Parameters:     592,130 (0.506% - pooler + classifier head)
+    * Frozen Parameters:    116,477,952
+- Observed Evaluation Results (Epoch 3):
+    * Eval Loss:            0.5133
+    * Eval Accuracy:        0.7656 (76.56%)
+    * Eval F1-Score:        0.7887
+- Inference Verification (check.py / predict_promoter.py):
+    * Sample DNA Sequence:  "AGCTCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATC"
+    * Probabilities:        [0.37293195724487305, 0.627068042755127]
+    * Predicted Class:      1 (Promoter)
+
+
+3. MODEL B: HYBRID QUANTUM-CLASSICAL ADAPTATION (QUANTUM-LORA)
+--------------------------------------------------------------------------------
+- Script:          quantum_lora_genomics.py
+- Base Backbone:   quietflamingo/dnabert2-no-flashattention (BertModel, frozen)
+- Saved Artifact:  ./quantum_lora_adapters.pt
+                     keys: ['classifier_state_dict', 'regressor_state_dict']
+- Dataset Split:   200 Train / 50 Val / 100 Test
+                   (Train: 112 Promoter, 88 Non-Promoter;
+                    Val:    22 Promoter, 28 Non-Promoter;
+                    Test:   45 Promoter, 55 Non-Promoter;
+                    Missing=0, InvalidDNA=0)
+- Architecture:
+    1) Frozen Backbone: DNABERT-2 extracts 768-D pooled sequence embeddings
+       (117,068,544 frozen parameters).
+    2) Quantum Bottleneck: nn.Linear(768, 4) compresses 768-D features into 4
+       dimensions, followed by torch.tanh(...) * (pi / 2) to map features into
+       quantum rotation angles in [-pi/2, pi/2].
+    3) Quantum Variational Circuit: 4-Qubit PennyLane default.qubit circuit
+       using AngleEmbedding + 2 layers of StronglyEntanglingLayers, measuring
+       PauliZ expectation values on all 4 qubits.
+    4) Task Heads:
+       - QuantumDNAClassifier: Linear(4, 2) for Binary Classification
+       - QuantumDNARegressor:  Linear(4, 1) for Quantitative Expression Strength
+- Parameter Count:
+    * Total Parameters:             117,071,654
+    * Trainable (Classifier):             3,110 (0.00266% of total)
+    * Trainable (Regressor):              3,105
+- Observed Results:
+    * Task 1 - Low-Data Binary Classification (25 epochs, AdamW lr=0.015):
+        - Train Accuracy:   0.860 (86.0%)
+        - Test Accuracy:    0.750 (75.0%)
+        - Test F1-Score:    0.719
+        - Test ROC-AUC:     0.824
+    * Task 2 - Quantitative Regression (80 epochs, AdamW lr=0.03):
+        - Test MSE:         1.1953
+        - Test R2:          0.2567
+        - Pearson r:        0.5890
+
+
+4. COMPARISON & KEY TAKEAWAYS
+--------------------------------------------------------------------------------
+- Extreme Parameter Efficiency:
+  Quantum-LoRA trains ~190x fewer parameters (3,110 vs. 592,130) while
+  achieving comparable test accuracy (75.0% vs. 76.56%) and strong ranking
+  performance (ROC-AUC 0.824) on low-data genomic splits.
+- Multi-Task Capability:
+  DNABERT-2 Trainer focuses on discrete binary promoter classification, while
+  Quantum-LoRA demonstrates both binary classification and continuous
+  expression-strength regression (Pearson r = 0.5890) from the same frozen
+  768-D genomic representations.
+
+
+5. DOCKERIZATION & PROJECT FILES
+--------------------------------------------------------------------------------
+- app.py                  FastAPI REST API (GET /health, POST /predict) serving
+                          ./my_fine_tuned_dnabert on port 8000.
+- Dockerfile              python:3.10-slim container with CPU PyTorch, project
+                          scripts, ./my_fine_tuned_dnabert, and
+                          ./quantum_lora_adapters.pt.
+- docker-compose.yml      Defines service 'dna-api' exposing port 8000.
+- requirements.txt        Python dependencies for container builds.
+- .dockerignore           Excludes venv/, __pycache__/, and intermediate
+                          dnabert_promoters_output/ checkpoints.
+- check.py /
+  predict_promoter.py     Local inference scripts (run via:
+                          .\venv\Scripts\python.exe check.py).
+================================================================================

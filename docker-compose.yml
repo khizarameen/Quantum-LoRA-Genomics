@@ -1,0 +1,15 @@
+services:
+  dna-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dna-quantum-lora:latest
+    container_name: dna-promoter-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=./my_fine_tuned_dnabert
+    volumes:
+      - ./my_fine_tuned_dnabert:/app/my_fine_tuned_dnabert
+      - ./quantum_lora_adapters.pt:/app/quantum_lora_adapters.pt
+    restart: unless-stopped
